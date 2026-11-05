@@ -85,6 +85,7 @@ private:
     size_t localClockPacedFrameStat = 0;
     size_t playoutResyncStat = 0;
     double averageWaitMs = 0.0;
+    size_t backlogDraws = 0;
 };
 
 class AVFrameHolder : public Singleton<AVFrameHolder> {

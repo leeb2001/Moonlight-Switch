@@ -19,6 +19,12 @@ constexpr double kArrivalRateSmoothing = 0.35;
 constexpr double kOccupancyCorrectionPerFrame = 0.01;
 constexpr double kMaximumOccupancyCorrection = 0.08;
 constexpr double kWaitSmoothing = 0.1;
+// Hosts often send slightly faster than the configured FPS relative to the
+// local display clock, so the estimate must be able to exceed it.
+constexpr double kSourceFpsHeadroom = 1.1;
+// About a third of a second at 60 Hz: long enough to ride out network jitter,
+// short enough that a rate mismatch cannot hold an extra frame for long.
+constexpr size_t kBacklogDrawLimit = 20;
 
 // Wraps about every 71 minutes, which unsigned subtraction handles.
 uint32_t steadyMicros() {
@@ -193,6 +199,21 @@ AVFrame* AVFrameQueue::pop(bool* consumed) {
         playoutResyncNeeded = true;
     }
 
+    // Occupancy correction alone drains a surplus too slowly when the host
+    // runs faster than the display, leaving a standing backlog of frames.
+    if (queue.size() > targetBufferedFrames + 1) {
+        if (++backlogDraws >= kBacklogDrawLimit) {
+            AVFrame* droppedFrame = queue.front();
+            queue.pop();
+            recycleFrame(freeQueue, droppedFrame);
+            framesDroppedStat++;
+            pacingSkipStat++;
+            backlogDraws = 0;
+        }
+    } else {
+        backlogDraws = 0;
+    }
+
     size_t dueFrames = 0;
     const bool backlogResync = limit > 0 && queue.size() >= limit;
     if ((playoutResyncNeeded || backlogResync) && !queue.empty()) {
@@ -319,6 +340,7 @@ void AVFrameQueue::configure(size_t queueLimit, int configuredStreamFps,
     startupBuffering = true;
     playoutResyncNeeded = true;
     averageWaitMs = 0.0;
+    backlogDraws = 0;
 }
 
 size_t AVFrameQueue::size() const {
@@ -477,7 +499,7 @@ void AVFrameQueue::recordArrivalLocked(
         double sampleFps =
             static_cast<double>(arrivalWindowFrames - 1) / elapsedSeconds;
         const double maximumFps =
-            streamFps > 0 ? static_cast<double>(streamFps) : 240.0;
+            streamFps > 0 ? static_cast<double>(streamFps) * kSourceFpsHeadroom : 240.0;
         sampleFps = std::clamp(sampleFps, 1.0, maximumFps);
 
         if (arrivalRateSamples == 0) {
@@ -532,6 +554,7 @@ void AVFrameQueue::cleanup() {
     localClockPacedFrameStat = 0;
     playoutResyncStat = 0;
     averageWaitMs = 0.0;
+    backlogDraws = 0;
     drawClockStarted = false;
     averageDrawInterval = std::chrono::nanoseconds::zero();
     arrivalClockStarted = false;
