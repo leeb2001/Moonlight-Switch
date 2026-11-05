@@ -697,6 +697,28 @@ int FFmpegVideoDecoder::submit_decode_unit(PDECODE_UNIT decode_unit) {
             m_video_decode_stats_progress.measurement_start_timestamp = LiGetMillis();
         }
 
+        // Frame sizes vary a lot, so the bitrate uses a longer window than the
+        // other decoder statistics.
+        const uint64_t bitrate_now = LiGetMillis();
+        if (m_bitrate_window_start_ms == 0) {
+            m_bitrate_window_start_ms = bitrate_now;
+        }
+        m_bitrate_window_bytes += decode_unit->fullLength;
+        const uint64_t bitrate_elapsed = bitrate_now - m_bitrate_window_start_ms;
+        if (bitrate_elapsed >= 1000) {
+            m_current_bitrate_mbps =
+                (float)(m_bitrate_window_bytes * 8) / (float)bitrate_elapsed / 1000.0f;
+            m_bitrate_window_start_ms = bitrate_now;
+            m_bitrate_window_bytes = 0;
+        }
+
+        // Zero when the host doesn't report it or the frame is a repeat.
+        if (decode_unit->frameHostProcessingLatency != 0) {
+            m_video_decode_stats_progress.current_host_latency_sum +=
+                decode_unit->frameHostProcessingLatency;
+            m_video_decode_stats_progress.current_host_latency_frames++;
+        }
+
         if (!m_last_frame) {
             m_last_frame = decode_unit->frameNumber;
         } else {
@@ -820,6 +842,13 @@ int FFmpegVideoDecoder::submit_decode_unit(PDECODE_UNIT decode_unit) {
                         (float)m_video_decode_stats_cache.current_decoded_frames /
                         ((float)(now - m_video_decode_stats_cache.measurement_start_timestamp) /
                     1000);
+
+                m_video_decode_stats_cache.current_bitrate_mbps = m_current_bitrate_mbps;
+                m_video_decode_stats_cache.current_host_latency =
+                    m_video_decode_stats_cache.current_host_latency_frames
+                        ? (float)m_video_decode_stats_cache.current_host_latency_sum / 10.0f /
+                              (float)m_video_decode_stats_cache.current_host_latency_frames
+                        : 0.0f;
 
                 m_video_decode_stats_cache.current_receive_time = (float) m_video_decode_stats_cache.current_reassembly_time /
                                                                   (float) m_video_decode_stats_cache.current_received_frames;

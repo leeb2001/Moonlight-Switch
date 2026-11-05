@@ -324,29 +324,33 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
     if (draw_stats) {
         auto stats = session->session_stats();
 
-        auto statistics = fmt::format(
-                    "Estimated host PC frame rate: {:.{}f} FPS\n"
-                        "Incoming frame rate from network: {:.{}f} FPS\n"
-                        "Decoding frame rate: {:.{}f} FPS\n"
-                        "Rendering frame rate: {:.{}f} FPS\n",
-                    stats->video_decode_stats.current_host_fps, 2,
-                    stats->video_decode_stats.current_received_fps, 2,
-                    stats->video_decode_stats.current_decoded_fps, 2,
-                    stats->video_render_stats.rendered_fps, 2);
+        const auto& decodeStats = stats->video_decode_stats;
+        const auto& renderStats = stats->video_render_stats;
+        const float hostMs = decodeStats.current_host_latency;
+        const float networkMs = stats->estimated_rtt_ms / 2.0f;
+        const float decodeMs = decodeStats.current_decoding_time + decodeStats.current_decoder_delay;
+        const float queueMs = AVFrameHolder::instance().getFrameQueueAverageWaitMs();
+        const float latencyMs = hostMs + networkMs + decodeStats.current_receive_time +
+                                decodeMs + queueMs + renderStats.rendering_time;
 
-        statistics += fmt::format("Frames dropped by your network connection: {}\n"
-                                  "Average receive time: {:.{}f} | {:.{}f} ms\n"
-                                  "Average decode time: {:.{}f} | {:.{}f} ms\n"
-                                  "Average decoder delay: {:.{}f} | {:.{}f} ms\n"
-                                  "Average rendering time: {:.{}f} ms\n",
-                                  stats->video_decode_stats.network_dropped_frames,
-                                  stats->video_decode_stats.current_receive_time, 2,
-                                  stats->video_decode_stats.session_receive_time, 2,
-                                  stats->video_decode_stats.current_decoding_time, 2,
-                                  stats->video_decode_stats.session_decoding_time, 2,
-                                  stats->video_decode_stats.current_decoder_delay, 2,
-                                  stats->video_decode_stats.session_decoder_delay, 2,
-                                  stats->video_render_stats.rendering_time, 2);
+        auto statistics = fmt::format(
+            "FPS host | network | decoded | rendered: {:.1f} | {:.1f} | {:.1f} | {:.1f}\n"
+            "Video bitrate: {:.1f} Mbps\n"
+            "Latency estimate: {:.1f} ms (display not included)\n"
+            "Host {} | Network ~{:.1f} | Receive {:.1f} | Decode {:.1f} | Queue {:.1f} | Render {:.1f}\n"
+            "Frames lost by network | repeated | skipped: {} | {} | {}\n"
+            "Missed refreshes: {}\n",
+            decodeStats.current_host_fps, decodeStats.current_received_fps,
+            decodeStats.current_decoded_fps, renderStats.rendered_fps,
+            decodeStats.current_bitrate_mbps,
+            latencyMs,
+            hostMs > 0 ? fmt::format("{:.1f}", hostMs) : std::string("n/a"),
+            networkMs, decodeStats.current_receive_time, decodeMs, queueMs,
+            renderStats.rendering_time,
+            decodeStats.network_dropped_frames,
+            AVFrameHolder::instance().getFakeFrameStat(),
+            AVFrameHolder::instance().getFrameDropStat(),
+            session->missed_refreshes());
 
         if (stats->video_render_stats.gpu_timed_frames > 0) {
             statistics += fmt::format("Average GPU render time: {:.{}f} ms\n",
@@ -365,33 +369,9 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
                 /*stats->video_render_stats.rendered_frames*/);
         }
 
-        statistics += fmt::format("Frames queue underflows | skipped: {} | {}\n"
-                                  "Queue empty | startup holds: {} | {}\n"
-                                  "Queue overflow | paced skips: {} | {}\n"
-                                  "Scheduled frame holds: {}\n"
-                                  "Frames presented by local clock: {}\n"
-                                  "Playout resyncs | estimated source: {} | {:.2f} FPS\n"
-                                  "Max pushes between draws: {}\n"
-                                  "Frames queue depth | target | capacity: {} | {} | {}",
-                                  AVFrameHolder::instance().getFakeFrameStat(),
-                                  AVFrameHolder::instance().getFrameDropStat(),
-                                  AVFrameHolder::instance().getFrameQueueEmptyStat(),
-                                  AVFrameHolder::instance().getFrameQueueRebufferHoldStat(),
-                                  AVFrameHolder::instance().getFrameQueueOverflowDropStat(),
-                                  AVFrameHolder::instance().getFrameQueuePacingSkipStat(),
-                                  AVFrameHolder::instance().getFrameQueueScheduledHoldStat(),
-                                  AVFrameHolder::instance().getFrameQueueLocalClockPacedFrameStat(),
-                                  AVFrameHolder::instance().getFrameQueuePlayoutResyncStat(),
-                                  AVFrameHolder::instance().getFrameQueueEstimatedSourceFps(),
-                                  AVFrameHolder::instance().getFrameQueueMaxPushBurstStat(),
-                                  AVFrameHolder::instance().getFrameQueueSize(),
-                                  AVFrameHolder::instance().getFrameQueueTargetDepth(),
-                                  AVFrameHolder::instance().getFrameQueueCapacity());
-
-        statistics += fmt::format("\nLow latency: queue {} | late pickup {} ms | missed refreshes {}\nDouble buffer {} | fast input {}",
+        statistics += fmt::format("Frame queue {} | late pickup {} ms | double buffer {} | fast input {}",
                                   Settings::instance().frames_queue_size(),
                                   Settings::instance().late_latch_ms(),
-                                  session->missed_refreshes(),
                                   Settings::instance().double_buffer() ? "on" : "off",
                                   Settings::instance().fast_input_polling() ? "on" : "off");
 

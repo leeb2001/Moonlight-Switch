@@ -7,6 +7,7 @@
 struct SessionStats {
     VideoDecodeStats video_decode_stats;
     VideoRenderStats video_render_stats;
+    uint32_t estimated_rtt_ms;
 };
 
 class MoonlightSession {

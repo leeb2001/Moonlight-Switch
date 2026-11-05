@@ -71,6 +71,9 @@ class FFmpegVideoDecoder : public IFFmpegVideoDecoder {
     VideoDecodeStats m_video_decode_stats_progress = {};
     VideoDecodeStats m_video_decode_stats_cache = {};
     uint64_t timeCount = 0;
+    uint64_t m_bitrate_window_start_ms = 0;
+    uint64_t m_bitrate_window_bytes = 0;
+    float m_current_bitrate_mbps = 0;
 
     char* m_ffmpeg_buffer = nullptr;
   #if defined(PLATFORM_ANDROID)

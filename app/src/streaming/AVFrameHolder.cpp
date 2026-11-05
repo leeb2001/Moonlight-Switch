@@ -8,6 +8,7 @@
 #include "AVFrameHolder.hpp"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace {
 
@@ -17,6 +18,21 @@ constexpr auto kArrivalRateResetGap = std::chrono::milliseconds(500);
 constexpr double kArrivalRateSmoothing = 0.35;
 constexpr double kOccupancyCorrectionPerFrame = 0.01;
 constexpr double kMaximumOccupancyCorrection = 0.08;
+constexpr double kWaitSmoothing = 0.1;
+
+// Wraps about every 71 minutes, which unsigned subtraction handles.
+uint32_t steadyMicros() {
+    return static_cast<uint32_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+}
+
+// Frames in the queue are not touched by the decoder or renderers until they
+// are consumed, and av_frame_unref clears this when a frame is recycled.
+void stampQueuedTime(AVFrame* frame) {
+    frame->opaque = reinterpret_cast<void*>(static_cast<uintptr_t>(steadyMicros()));
+}
 
 void freeFrameQueue(std::queue<AVFrame*>& frames) {
     for (; !frames.empty(); frames.pop()) {
@@ -69,6 +85,7 @@ bool AVFrameQueue::push(AVFrame* item) {
         return false;
     }
 
+    stampQueuedTime(queuedFrame);
     queue.push(queuedFrame);
     recordArrivalLocked(std::chrono::steady_clock::now());
     pushesSincePop++;
@@ -149,6 +166,7 @@ AVFrame* AVFrameQueue::pop(bool* consumed) {
         }
         bufferFrame = queue.front();
         queue.pop();
+        recordFrameWaitLocked(bufferFrame);
 
         if (consumed) {
             *consumed = true;
@@ -257,6 +275,7 @@ AVFrame* AVFrameQueue::pop(bool* consumed) {
             bufferFrame = item;
         }
     }
+    recordFrameWaitLocked(bufferFrame);
 
     if (consumed) {
         *consumed = true;
@@ -299,6 +318,7 @@ void AVFrameQueue::configure(size_t queueLimit, int configuredStreamFps,
     frameCredit = 0.0;
     startupBuffering = true;
     playoutResyncNeeded = true;
+    averageWaitMs = 0.0;
 }
 
 size_t AVFrameQueue::size() const {
@@ -371,6 +391,20 @@ double AVFrameQueue::getEstimatedSourceFps() const {
     return estimatedSourceFps;
 }
 
+double AVFrameQueue::getAverageWaitMs() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return averageWaitMs;
+}
+
+void AVFrameQueue::recordFrameWaitLocked(const AVFrame* frame) {
+    const uint32_t queuedAt =
+        static_cast<uint32_t>(reinterpret_cast<uintptr_t>(frame->opaque));
+    const double waitMs = static_cast<double>(steadyMicros() - queuedAt) / 1000.0;
+    averageWaitMs = averageWaitMs == 0.0
+                        ? waitMs
+                        : averageWaitMs * (1.0 - kWaitSmoothing) + waitMs * kWaitSmoothing;
+}
+
 AVFrame* AVFrameQueue::acquireFrameLocked() {
     AVFrame* frame = nullptr;
     if (!freeQueue.empty()) {
@@ -389,6 +423,7 @@ bool AVFrameQueue::pushTransferredLocked(AVFrame* item) {
         return false;
     }
 
+    stampQueuedTime(item);
     queue.push(item);
     recordArrivalLocked(std::chrono::steady_clock::now());
     pushesSincePop++;
@@ -496,6 +531,7 @@ void AVFrameQueue::cleanup() {
     maxPushBurstStat = 0;
     localClockPacedFrameStat = 0;
     playoutResyncStat = 0;
+    averageWaitMs = 0.0;
     drawClockStarted = false;
     averageDrawInterval = std::chrono::nanoseconds::zero();
     arrivalClockStarted = false;

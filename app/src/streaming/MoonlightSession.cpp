@@ -427,6 +427,9 @@ void MoonlightSession::draw(NVGcontext* vg, int width, int height) {
                 *m_video_decoder->video_decode_stats();
             m_session_stats.video_render_stats =
                 *m_video_renderer->video_render_stats();
+            uint32_t estimatedRtt = 0;
+            m_session_stats.estimated_rtt_ms =
+                LiGetEstimatedRttInfo(&estimatedRtt, nullptr) ? estimatedRtt : 0;
             m_last_stats_update_ms = now;
         }
     }

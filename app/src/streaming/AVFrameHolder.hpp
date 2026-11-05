@@ -39,6 +39,7 @@ public:
     [[nodiscard]] size_t getLocalClockPacedFrameStat() const;
     [[nodiscard]] size_t getPlayoutResyncStat() const;
     [[nodiscard]] double getEstimatedSourceFps() const;
+    [[nodiscard]] double getAverageWaitMs() const;
 
     void cleanup();
 
@@ -49,6 +50,7 @@ private:
     void recordArrivalLocked(std::chrono::steady_clock::time_point now);
     void resetArrivalRateEstimatorLocked();
     void trimToPlayoutWindowLocked();
+    void recordFrameWaitLocked(const AVFrame* frame);
     size_t limit = 0;
     std::queue<AVFrame*> queue;
     std::queue<AVFrame*> freeQueue;
@@ -82,6 +84,7 @@ private:
     size_t maxPushBurstStat = 0;
     size_t localClockPacedFrameStat = 0;
     size_t playoutResyncStat = 0;
+    double averageWaitMs = 0.0;
 };
 
 class AVFrameHolder : public Singleton<AVFrameHolder> {
@@ -134,6 +137,7 @@ class AVFrameHolder : public Singleton<AVFrameHolder> {
     [[nodiscard]] size_t getFrameQueueLocalClockPacedFrameStat() const { return m_frame_queue.getLocalClockPacedFrameStat(); }
     [[nodiscard]] size_t getFrameQueuePlayoutResyncStat() const { return m_frame_queue.getPlayoutResyncStat(); }
     [[nodiscard]] double getFrameQueueEstimatedSourceFps() const { return m_frame_queue.getEstimatedSourceFps(); }
+    [[nodiscard]] double getFrameQueueAverageWaitMs() const { return m_frame_queue.getAverageWaitMs(); }
 
   private:
     AVFrameQueue m_frame_queue;
