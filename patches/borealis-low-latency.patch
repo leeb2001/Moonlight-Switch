@@ -21,28 +21,19 @@ index 6b08579..04b4b14 100644
      HidVibrationDeviceHandle m_vibration_device_handheld[2];
      HidVibrationValue m_vibration_values_handheld[2];
 diff --git a/library/include/borealis/platforms/switch/switch_video.hpp b/library/include/borealis/platforms/switch/switch_video.hpp
-index 3a342b0..fdcab1e 100644
+index 3a342b0..cf477e0 100644
 --- a/library/include/borealis/platforms/switch/switch_video.hpp
 +++ b/library/include/borealis/platforms/switch/switch_video.hpp
 @@ -50,6 +50,9 @@ class SwitchVideoContext : public VideoContext
  
      void appletCallback(AppletHookType hookType);
  
-+    // Changes how many images the swapchain uses (2 or 3), starting from the next frame.
-+    void setFramebufferCount(unsigned count);
++    // How many images the swapchain uses (2 or 3). Set before the window is created.
++    static inline unsigned framebufferCount = FRAMEBUFFERS_COUNT;
 +
      void recordStaticCommands();
  
      dk::Device getDeko3dDevice();
-@@ -82,6 +85,8 @@ class SwitchVideoContext : public VideoContext
- 
-     float framebufferWidth, framebufferHeight;
-     int imageSlot;
-+    unsigned framebufferCount        = FRAMEBUFFERS_COUNT;
-+    unsigned pendingFramebufferCount = 0;
- 
-     dk::UniqueDevice device;
-     dk::UniqueQueue queue;
 diff --git a/library/lib/platforms/switch/switch_input.cpp b/library/lib/platforms/switch/switch_input.cpp
 index 195b4c3..50e3fbf 100644
 --- a/library/lib/platforms/switch/switch_input.cpp
@@ -104,7 +95,7 @@ index 195b4c3..50e3fbf 100644
  
      uint64_t style_set = padGetStyleSet(&padsState[0]);
 diff --git a/library/lib/platforms/switch/switch_video.cpp b/library/lib/platforms/switch/switch_video.cpp
-index dc87445..a3fe9e8 100644
+index dc87445..b9eb1a6 100644
 --- a/library/lib/platforms/switch/switch_video.cpp
 +++ b/library/lib/platforms/switch/switch_video.cpp
 @@ -106,7 +106,7 @@ void SwitchVideoContext::createFramebufferResources()
@@ -112,7 +103,7 @@ index dc87445..a3fe9e8 100644
      uint32_t fbAlign = framebufferLayout.getAlignment();
  
 -    for (unsigned i = 0; i < FRAMEBUFFERS_COUNT; i++)
-+    for (unsigned i = 0; i < this->framebufferCount; i++)
++    for (unsigned i = 0; i < framebufferCount; i++)
      {
          // Allocate a framebuffer
          framebuffersHandles[i] = this->imagesPool->allocate(fbSize, fbAlign);
@@ -121,52 +112,16 @@ index dc87445..a3fe9e8 100644
  
      // Create the swapchain using the framebuffers
 -    this->swapchain = dk::SwapchainMaker { this->device, nwindowGetDefault(), fbArray }.create();
-+    this->swapchain = dk::SwapchainMaker { this->device, nwindowGetDefault(), fbArray.data(), this->framebufferCount }.create();
++    this->swapchain = dk::SwapchainMaker { this->device, nwindowGetDefault(), fbArray.data(), framebufferCount }.create();
  
      // Generate the main rendering cmdlist
      this->recordStaticCommands();
-@@ -208,15 +208,35 @@ void SwitchVideoContext::resetFramebuffer()
- {
-     brls::Logger::error("resetFramebuffer");
-     this->destroyFramebufferResources();
-+
-+    if (this->pendingFramebufferCount != 0)
-+    {
-+        this->framebufferCount        = this->pendingFramebufferCount;
-+        this->pendingFramebufferCount = 0;
-+    }
-+
-     this->updateWindowSize();
-     this->createFramebufferResources();
- }
- 
-+void SwitchVideoContext::setFramebufferCount(unsigned count)
-+{
-+    if (count < 2 || count > FRAMEBUFFERS_COUNT || count == this->framebufferCount)
-+    {
-+        this->pendingFramebufferCount = 0;
-+        return;
-+    }
-+
-+    this->pendingFramebufferCount = count;
-+}
-+
- void SwitchVideoContext::beginFrame()
- {
-     // Poll the display resolution change event
-     if (this->displayResolutionChangeEventReady && R_SUCCEEDED(eventWait(&this->defaultDisplayResolutionChangeEvent, 0)))
-         this->resetFramebuffer();
-+    else if (this->pendingFramebufferCount != 0)
-+        this->resetFramebuffer();
- 
-     this->imageSlot = this->queue.acquireImage(this->swapchain);
- 
-@@ -255,7 +275,7 @@ void SwitchVideoContext::destroyFramebufferResources()
+@@ -255,7 +255,7 @@ void SwitchVideoContext::destroyFramebufferResources()
      this->swapchain.destroy();
  
      // Destroy the framebuffers
 -    for (unsigned i = 0; i < FRAMEBUFFERS_COUNT; i++)
-+    for (unsigned i = 0; i < this->framebufferCount; i++)
++    for (unsigned i = 0; i < framebufferCount; i++)
          framebuffersHandles[i].destroy();
  
      // Destroy the depth buffer

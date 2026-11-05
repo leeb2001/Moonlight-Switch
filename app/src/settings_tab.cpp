@@ -15,7 +15,6 @@
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
 #include "UpscalingSupport.hpp"
-#include "SwitchPresentation.hpp"
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -350,10 +349,7 @@ SettingsTab::SettingsTab() {
 
 #if defined(__SWITCH__) && defined(BOREALIS_USE_DEKO3D)
     doubleBuffer->init("settings/double_buffer"_i18n, Settings::instance().double_buffer(),
-                       [](bool value) {
-                           Settings::instance().set_double_buffer(value);
-                           applySwitchPresentationSettings();
-                       });
+                       [](bool value) { Settings::instance().set_double_buffer(value); });
 #else
     doubleBuffer->removeFromSuperView(true);
 #endif

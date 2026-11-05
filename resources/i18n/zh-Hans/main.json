@@ -118,7 +118,7 @@
         "debug": "调试",
         "debugging_view": "显示调试画面",
         "decoder_threads": "解码器线程",
-        "double_buffer": "低延迟：双缓冲输出",
+        "double_buffer": "低延迟：双缓冲输出（重启生效）",
         "fast_input_polling": "低延迟：高频手柄采样",
         "latest_frame_mode": "低延迟：始终显示最新帧",
         "fps": "FPS",

@@ -133,11 +133,13 @@ int main(int argc, char* argv[]) {
     MoonlightSession::set_provider(
             new SwitchMoonlightSessionDecoderAndRenderProvider());
 
-    brls::Application::createWindow("title"_i18n);
-
+    // Settings load first: they decide how the swapchain is created.
     auto home = Application::getPlatform()->getHomeDirectory("Moonlight-Switch");
     Settings::instance().set_working_dir(home);
     applySwitchPresentationSettings();
+
+    brls::Application::createWindow("title"_i18n);
+
     Settings::instance().set_launch_path(argc > 0 ? argv[0] : "");
     brls::Logger::info("Working dir, {}", home);
 

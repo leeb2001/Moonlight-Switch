@@ -118,7 +118,7 @@
         "debug": "Debug",
         "debugging_view": "Show debugging view",
         "decoder_threads": "Decoder Threads",
-        "double_buffer": "Low latency: double buffering",
+        "double_buffer": "Low latency: double buffering (needs restart)",
         "fast_input_polling": "Low latency: fast controller polling",
         "latest_frame_mode": "Low latency: always show newest frame",
         "fps": "FPS",

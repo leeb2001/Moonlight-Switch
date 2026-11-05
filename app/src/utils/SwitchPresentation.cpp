@@ -5,14 +5,11 @@
 // header has brought brls::Event in with `using namespace brls`.
 #include <borealis/platforms/switch/switch_video.hpp>
 
-#include <borealis.hpp>
-
 #include "Settings.hpp"
 
 void applySwitchPresentationSettings() {
-    auto* context = static_cast<brls::SwitchVideoContext*>(
-        brls::Application::getPlatform()->getVideoContext());
-    context->setFramebufferCount(Settings::instance().double_buffer() ? 2 : 3);
+    brls::SwitchVideoContext::framebufferCount =
+        Settings::instance().double_buffer() ? 2 : 3;
 }
 #else
 void applySwitchPresentationSettings() {}
