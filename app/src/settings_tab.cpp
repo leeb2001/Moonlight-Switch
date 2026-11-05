@@ -245,6 +245,8 @@ SettingsTab::SettingsTab() {
     std::vector<std::string> fpss = {
         "30",
         "40",
+        "50",
+        "55",
         "60",
         "120",
     };
@@ -261,8 +263,10 @@ SettingsTab::SettingsTab() {
 #else
         GET_SETTINGS(fps, 30, 0);
         GET_SETTINGS(fps, 40, 1);
-        GET_SETTINGS(fps, 60, 2);
-        GET_SETTINGS(fps, 120, 3);
+        GET_SETTINGS(fps, 50, 2);
+        GET_SETTINGS(fps, 55, 3);
+        GET_SETTINGS(fps, 60, 4);
+        GET_SETTINGS(fps, 120, 5);
 #endif
         DEFAULT;
     }
@@ -277,8 +281,10 @@ SettingsTab::SettingsTab() {
 #else
             SET_SETTING(0, set_fps(30));
             SET_SETTING(1, set_fps(40));
-            SET_SETTING(2, set_fps(60));
-            SET_SETTING(3, set_fps(120));
+            SET_SETTING(2, set_fps(50));
+            SET_SETTING(3, set_fps(55));
+            SET_SETTING(4, set_fps(60));
+            SET_SETTING(5, set_fps(120));
 #endif
             DEFAULT;
         }
