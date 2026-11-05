@@ -1,0 +1,172 @@
+diff --git a/library/include/borealis/platforms/switch/switch_input.hpp b/library/include/borealis/platforms/switch/switch_input.hpp
+index 6b08579..04b4b14 100644
+--- a/library/include/borealis/platforms/switch/switch_input.hpp
++++ b/library/include/borealis/platforms/switch/switch_input.hpp
+@@ -20,6 +20,7 @@
+ #include <switch.h>
+ #include <unordered_map>
+ 
++#include <mutex>
+ #include <stop_token>
+ #include <thread>
+ #include <borealis/core/input.hpp>
+@@ -96,6 +97,9 @@ class SwitchInputManager : public InputManager
+     int cursorTexture = 0;
+     NVGpaint paint;
+     Point lastCursorPosition;
++    // PadState is updated by every read, and reads can come from the UI thread,
++    // the rumble callback and an application input thread.
++    std::recursive_mutex padMutex;
+     PadState padStateHandheld;
+     HidVibrationDeviceHandle m_vibration_device_handheld[2];
+     HidVibrationValue m_vibration_values_handheld[2];
+diff --git a/library/include/borealis/platforms/switch/switch_video.hpp b/library/include/borealis/platforms/switch/switch_video.hpp
+index 3a342b0..fdcab1e 100644
+--- a/library/include/borealis/platforms/switch/switch_video.hpp
++++ b/library/include/borealis/platforms/switch/switch_video.hpp
+@@ -50,6 +50,9 @@ class SwitchVideoContext : public VideoContext
+ 
+     void appletCallback(AppletHookType hookType);
+ 
++    // Changes how many images the swapchain uses (2 or 3), starting from the next frame.
++    void setFramebufferCount(unsigned count);
++
+     void recordStaticCommands();
+ 
+     dk::Device getDeko3dDevice();
+@@ -82,6 +85,8 @@ class SwitchVideoContext : public VideoContext
+ 
+     float framebufferWidth, framebufferHeight;
+     int imageSlot;
++    unsigned framebufferCount        = FRAMEBUFFERS_COUNT;
++    unsigned pendingFramebufferCount = 0;
+ 
+     dk::UniqueDevice device;
+     dk::UniqueQueue queue;
+diff --git a/library/lib/platforms/switch/switch_input.cpp b/library/lib/platforms/switch/switch_input.cpp
+index 195b4c3..50e3fbf 100644
+--- a/library/lib/platforms/switch/switch_input.cpp
++++ b/library/lib/platforms/switch/switch_input.cpp
+@@ -162,6 +162,7 @@ SwitchInputManager::~SwitchInputManager()
+ 
+ void SwitchInputManager::clearVibration(int controller)
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     Logger::debug("Vibration clear #{}", controller);
+     hidInitializeVibrationDevices(m_vibration_device_handles[controller], 2, (HidNpadIdType)controller, HidNpadStyleTag_NpadJoyDual);
+     sendRumbleInternal(m_vibration_device_handles[controller], m_vibration_values[controller], 160.0f, 320.0f, 0.0f, 0.0f);
+@@ -169,6 +170,7 @@ void SwitchInputManager::clearVibration(int controller)
+ 
+ void SwitchInputManager::updateUnifiedControllerState(ControllerState* state)
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     for (size_t i         = 0; i < _BUTTON_MAX; i++)
+         state->buttons[i] = false;
+ 
+@@ -213,6 +215,7 @@ void SwitchInputManager::updateUnifiedControllerState(ControllerState* state)
+ 
+ short SwitchInputManager::getControllersConnectedCount()
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     padUpdate(&this->padStateHandheld);
+     int extra       = padStateHandheld.active_handheld ? 1 : 0;
+     int controllers = extra;
+@@ -228,6 +231,7 @@ short SwitchInputManager::getControllersConnectedCount()
+ 
+ void SwitchInputManager::updateControllerState(ControllerState* state, int controller)
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     padUpdate(&this->padStateHandheld);
+     if (controller == 0 && padStateHandheld.active_handheld)
+     {
+@@ -358,6 +362,7 @@ void SwitchInputManager::sendRumbleInternal(HidVibrationDeviceHandle vibration_d
+ 
+ void SwitchInputManager::sendRumble(unsigned short controller, unsigned short lowFreqMotor, unsigned short highFreqMotor)
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     padUpdate(&this->padStateHandheld);
+     if (controller == 0 && padStateHandheld.active_handheld)
+     {
+@@ -371,6 +376,7 @@ void SwitchInputManager::sendRumble(unsigned short controller, unsigned short lo
+ 
+ void SwitchInputManager::sendRumble(unsigned short controller, unsigned short lowFreqMotor, unsigned short highFreqMotor, unsigned short leftTriggerFreqMotor, unsigned short rightTriggerFreqMotor)
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     padUpdate(&this->padStateHandheld);
+     if (controller == 0 && padStateHandheld.active_handheld)
+     {
+@@ -460,6 +466,7 @@ void SwitchInputManager::handleKeyboard()
+ 
+ void SwitchInputManager::handleControllerSensors()
+ {
++    std::lock_guard<std::recursive_mutex> lock(this->padMutex);
+     HidSixAxisSensorState sixaxis = { 0 };
+ 
+     uint64_t style_set = padGetStyleSet(&padsState[0]);
+diff --git a/library/lib/platforms/switch/switch_video.cpp b/library/lib/platforms/switch/switch_video.cpp
+index dc87445..a3fe9e8 100644
+--- a/library/lib/platforms/switch/switch_video.cpp
++++ b/library/lib/platforms/switch/switch_video.cpp
+@@ -106,7 +106,7 @@ void SwitchVideoContext::createFramebufferResources()
+     uint64_t fbSize  = framebufferLayout.getSize();
+     uint32_t fbAlign = framebufferLayout.getAlignment();
+ 
+-    for (unsigned i = 0; i < FRAMEBUFFERS_COUNT; i++)
++    for (unsigned i = 0; i < this->framebufferCount; i++)
+     {
+         // Allocate a framebuffer
+         framebuffersHandles[i] = this->imagesPool->allocate(fbSize, fbAlign);
+@@ -122,7 +122,7 @@ void SwitchVideoContext::createFramebufferResources()
+     }
+ 
+     // Create the swapchain using the framebuffers
+-    this->swapchain = dk::SwapchainMaker { this->device, nwindowGetDefault(), fbArray }.create();
++    this->swapchain = dk::SwapchainMaker { this->device, nwindowGetDefault(), fbArray.data(), this->framebufferCount }.create();
+ 
+     // Generate the main rendering cmdlist
+     this->recordStaticCommands();
+@@ -208,15 +208,35 @@ void SwitchVideoContext::resetFramebuffer()
+ {
+     brls::Logger::error("resetFramebuffer");
+     this->destroyFramebufferResources();
++
++    if (this->pendingFramebufferCount != 0)
++    {
++        this->framebufferCount        = this->pendingFramebufferCount;
++        this->pendingFramebufferCount = 0;
++    }
++
+     this->updateWindowSize();
+     this->createFramebufferResources();
+ }
+ 
++void SwitchVideoContext::setFramebufferCount(unsigned count)
++{
++    if (count < 2 || count > FRAMEBUFFERS_COUNT || count == this->framebufferCount)
++    {
++        this->pendingFramebufferCount = 0;
++        return;
++    }
++
++    this->pendingFramebufferCount = count;
++}
++
+ void SwitchVideoContext::beginFrame()
+ {
+     // Poll the display resolution change event
+     if (this->displayResolutionChangeEventReady && R_SUCCEEDED(eventWait(&this->defaultDisplayResolutionChangeEvent, 0)))
+         this->resetFramebuffer();
++    else if (this->pendingFramebufferCount != 0)
++        this->resetFramebuffer();
+ 
+     this->imageSlot = this->queue.acquireImage(this->swapchain);
+ 
+@@ -255,7 +275,7 @@ void SwitchVideoContext::destroyFramebufferResources()
+     this->swapchain.destroy();
+ 
+     // Destroy the framebuffers
+-    for (unsigned i = 0; i < FRAMEBUFFERS_COUNT; i++)
++    for (unsigned i = 0; i < this->framebufferCount; i++)
+         framebuffersHandles[i].destroy();
+ 
+     // Destroy the depth buffer

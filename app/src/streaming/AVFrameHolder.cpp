@@ -128,6 +128,36 @@ AVFrame* AVFrameQueue::pop(bool* consumed) {
         }
     }
 
+    if (latestFrameOnly) {
+        // Lowest latency: always present the newest decoded frame. Nothing is
+        // reserved against jitter, so a late frame repeats the previous one.
+        if (queue.empty()) {
+            if (bufferFrame) {
+                fakeFrameUsedStat++;
+                emptyQueueStat++;
+            }
+            return bufferFrame;
+        }
+
+        recycleFrame(freeQueue, bufferFrame);
+        while (queue.size() > 1) {
+            AVFrame* droppedFrame = queue.front();
+            queue.pop();
+            recycleFrame(freeQueue, droppedFrame);
+            framesDroppedStat++;
+            pacingSkipStat++;
+        }
+        bufferFrame = queue.front();
+        queue.pop();
+
+        if (consumed) {
+            *consumed = true;
+        }
+        localClockPacedFrameStat++;
+
+        return bufferFrame;
+    }
+
     if (startupBuffering && queue.size() <= targetBufferedFrames) {
         if (bufferFrame) {
             fakeFrameUsedStat++;
@@ -247,12 +277,16 @@ void AVFrameQueue::recycleWriteFrame(AVFrame*& frame) {
 }
 
 void AVFrameQueue::configure(size_t queueLimit, int configuredStreamFps,
-                             bool transferOwnershipEnabled) {
+                             bool transferOwnershipEnabled,
+                             bool latestFrameOnlyEnabled) {
     std::lock_guard<std::mutex> lock(m_mutex);
     const size_t configuredDepth = std::max<size_t>(queueLimit, 1);
     limit = capacityFor(configuredDepth);
+    latestFrameOnly = latestFrameOnlyEnabled;
     targetBufferedFrames =
-        configuredDepth > 1 ? std::min<size_t>(configuredDepth - 1, 2) : 0;
+        !latestFrameOnly && configuredDepth > 1
+            ? std::min<size_t>(configuredDepth - 1, 2)
+            : 0;
     transferOwnership = transferOwnershipEnabled;
     streamFps = configuredStreamFps;
     adaptiveFrameInterval = std::chrono::nanoseconds::zero();
@@ -270,6 +304,11 @@ void AVFrameQueue::configure(size_t queueLimit, int configuredStreamFps,
 size_t AVFrameQueue::size() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return queue.size();
+}
+
+bool AVFrameQueue::isLatestFrameOnly() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return latestFrameOnly;
 }
 
 size_t AVFrameQueue::targetDepth() const {

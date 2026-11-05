@@ -27,6 +27,20 @@ float applyStickScrollDeadzone(float axis, float configuredDeadzone) {
 }
 }
 
+namespace {
+// Polling is about 250 Hz, which keeps up with the controller report rate.
+constexpr auto kControllerPollInterval = std::chrono::milliseconds(4);
+// The UI thread renews this while streaming. Once it stops (view covered, app
+// suspended, session ended) the polling thread stops sending input by itself.
+constexpr int64_t kControllerPollHeartbeatTimeoutNs = 100'000'000;
+
+int64_t steadyNowNs() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+} // namespace
+
 float fsqrt_(float f) {
     int i = *(int *)&f;
     i = (i >> 1) + 0x1fbb67ae;
@@ -187,7 +201,41 @@ void MoonlightInputManager::sendRelativeMouseMove(brls::Point offset) {
     LiSendMouseMoveEvent(deltaX, deltaY);
 }
 
+MoonlightInputManager::~MoonlightInputManager() {
+    stopControllerPolling();
+}
+
+void MoonlightInputManager::startControllerPolling() {
+    if (controllerPollThread.joinable())
+        return;
+
+    controllerPollRunning = true;
+    controllerPollThread = std::thread(&MoonlightInputManager::controllerPollLoop, this);
+}
+
+void MoonlightInputManager::stopControllerPolling() {
+    controllerPollAllowed = false;
+    controllerPollRunning = false;
+    if (controllerPollThread.joinable())
+        controllerPollThread.join();
+}
+
+void MoonlightInputManager::controllerPollLoop() {
+    while (controllerPollRunning) {
+        {
+            std::lock_guard<std::recursive_mutex> lock(controllersMutex);
+            const bool heartbeatFresh =
+                steadyNowNs() - controllerPollHeartbeatNs.load() <
+                kControllerPollHeartbeatTimeoutNs;
+            if (controllerPollAllowed && heartbeatFresh)
+                handleControllers(controllerPollSpecialKey);
+        }
+        std::this_thread::sleep_for(kControllerPollInterval);
+    }
+}
+
 void MoonlightInputManager::reloadButtonMappingLayout() {
+    std::lock_guard<std::recursive_mutex> lock(controllersMutex);
     KeyMappingLayout layout = (*Settings::instance().get_mapping_laouts())
         [Settings::instance().get_current_mapping_layout()];
     for (int i = 0; i < _BUTTON_MAX; i++) {
@@ -249,6 +297,11 @@ void MoonlightInputManager::handleRumbleTriggers(uint16_t controllerNumber,
 }
 
 void MoonlightInputManager::dropInput() {
+    // Must happen before the zeroed state below, so that the polling thread
+    // cannot send real input after it.
+    controllerPollAllowed = false;
+    std::lock_guard<std::recursive_mutex> lock(controllersMutex);
+
     if (inputDropped)
         return;
 
@@ -462,7 +515,19 @@ void MoonlightInputManager::handleInput(bool ignoreTouch) {
     //Do not use gamepad for mouse controll assist if touchscreen mode enabled
     bool specialKey = !ignoreTouch && !Settings::instance().touchscreen_mouse_mode() && states.size() == 1;
 
-    handleControllers(specialKey);
+#if defined(__SWITCH__)
+    if (Settings::instance().fast_input_polling()) {
+        startControllerPolling();
+        controllerPollSpecialKey = specialKey;
+        controllerPollHeartbeatNs = steadyNowNs();
+        controllerPollAllowed = true;
+    } else
+#endif
+    {
+        stopControllerPolling();
+        std::lock_guard<std::recursive_mutex> lock(controllersMutex);
+        handleControllers(specialKey);
+    }
 
     float stickScrolling = 0;
     if (specialKey) {

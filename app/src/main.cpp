@@ -36,6 +36,7 @@ unsigned int sceLibcHeapSize             = 24 * 1024 * 1024;
 #include "DiscoverManager.hpp"
 #include "MoonlightSession.hpp"
 #include "SwitchMoonlightSessionDecoderAndRenderProvider.hpp"
+#include "SwitchPresentation.hpp"
 
 
 #if defined(_WIN32) && defined(__SDL2__)
@@ -136,6 +137,7 @@ int main(int argc, char* argv[]) {
 
     auto home = Application::getPlatform()->getHomeDirectory("Moonlight-Switch");
     Settings::instance().set_working_dir(home);
+    applySwitchPresentationSettings();
     Settings::instance().set_launch_path(argc > 0 ? argv[0] : "");
     brls::Logger::info("Working dir, {}", home);
 

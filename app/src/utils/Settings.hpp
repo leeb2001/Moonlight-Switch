@@ -241,6 +241,15 @@ class Settings : public Singleton<Settings> {
     void set_frames_queue_size(int frames_queue_size) { m_frames_queue_size = frames_queue_size; }
     [[nodiscard]] int frames_queue_size() const { return m_frames_queue_size; }
 
+    void set_latest_frame_mode(bool enabled) { m_latest_frame_mode = enabled; }
+    [[nodiscard]] bool latest_frame_mode() const { return m_latest_frame_mode; }
+
+    void set_double_buffer(bool enabled) { m_double_buffer = enabled; }
+    [[nodiscard]] bool double_buffer() const { return m_double_buffer; }
+
+    void set_fast_input_polling(bool enabled) { m_fast_input_polling = enabled; }
+    [[nodiscard]] bool fast_input_polling() const { return m_fast_input_polling; }
+
     void set_sops(bool sops) { m_sops = sops; }
     [[nodiscard]] bool sops() const { return m_sops; }
 
@@ -356,6 +365,15 @@ class Settings : public Singleton<Settings> {
     bool m_click_by_tap = false;
     int m_decoder_threads = 4;
     int m_frames_queue_size = 3;
+#ifdef __SWITCH__
+    bool m_latest_frame_mode = true;
+    bool m_double_buffer = true;
+    bool m_fast_input_polling = true;
+#else
+    bool m_latest_frame_mode = false;
+    bool m_double_buffer = false;
+    bool m_fast_input_polling = false;
+#endif
     bool m_sops = false;
     bool m_play_audio = false;
     bool m_write_log = false;

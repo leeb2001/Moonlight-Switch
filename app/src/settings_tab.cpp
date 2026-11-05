@@ -15,6 +15,7 @@
 #include "button_selecting_dialog.hpp"
 #include "mapping_layout_editor.hpp"
 #include "UpscalingSupport.hpp"
+#include "SwitchPresentation.hpp"
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -336,6 +337,26 @@ SettingsTab::SettingsTab() {
  #ifndef SUPPORT_HDR
     requestHdr->removeFromSuperView(true);
  #endif
+
+#if defined(__SWITCH__)
+    latestFrameMode->init("settings/latest_frame_mode"_i18n, Settings::instance().latest_frame_mode(),
+                          [](bool value) { Settings::instance().set_latest_frame_mode(value); });
+    fastInputPolling->init("settings/fast_input_polling"_i18n, Settings::instance().fast_input_polling(),
+                           [](bool value) { Settings::instance().set_fast_input_polling(value); });
+#else
+    latestFrameMode->removeFromSuperView(true);
+    fastInputPolling->removeFromSuperView(true);
+#endif
+
+#if defined(__SWITCH__) && defined(BOREALIS_USE_DEKO3D)
+    doubleBuffer->init("settings/double_buffer"_i18n, Settings::instance().double_buffer(),
+                       [](bool value) {
+                           Settings::instance().set_double_buffer(value);
+                           applySwitchPresentationSettings();
+                       });
+#else
+    doubleBuffer->removeFromSuperView(true);
+#endif
 
     hwDecoding->init("settings/use_hw_decoding"_i18n, Settings::instance().use_hw_decoding(),
                      [](bool value) { Settings::instance().set_use_hw_decoding(value); });

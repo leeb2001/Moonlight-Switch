@@ -41,6 +41,15 @@
                 id="decoder"/>
 
             <brls:BooleanCell
+                id="latest_frame_mode"/>
+
+            <brls:BooleanCell
+                id="double_buffer"/>
+
+            <brls:BooleanCell
+                id="fast_input_polling"/>
+
+            <brls:BooleanCell
                 id="use_hw_decoding"/>
 
             <brls:Header

@@ -293,7 +293,7 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
 
     session->draw(vg, (int) width, (int) height);
 
-    if (!tempInputLock && session->is_active())
+    if (!tempInputLock && !terminated && session->is_active())
         handleInput();
     handleOverlayCombo();
     handleMouseInputCombo();
@@ -388,6 +388,11 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
                                   AVFrameHolder::instance().getFrameQueueTargetDepth(),
                                   AVFrameHolder::instance().getFrameQueueCapacity());
 
+        statistics += fmt::format("\nLow latency: newest frame {} | double buffer {} | fast input {}",
+                                  AVFrameHolder::instance().isFrameQueueLatestOnly() ? "on" : "off",
+                                  Settings::instance().double_buffer() ? "on" : "off",
+                                  Settings::instance().fast_input_polling() ? "on" : "off");
+
         nvgFontFaceId(vg, Application::getFont(FONT_REGULAR));
         nvgFontSize(vg, 20);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
@@ -425,6 +430,8 @@ void StreamingView::terminate(bool terminateApp) {
     if (terminated)
         return;
     terminated = true;
+
+    MoonlightInputManager::instance().stopControllerPolling();
 
     session->stop(terminateApp);
 
@@ -585,6 +592,8 @@ void StreamingView::onLayout() {
 }
 
 StreamingView::~StreamingView() {
+    MoonlightInputManager::instance().stopControllerPolling();
+
 #ifdef PLATFORM_TVOS
     updatePreferredDisplayMode(false);
 #endif

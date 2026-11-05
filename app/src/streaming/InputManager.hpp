@@ -10,8 +10,11 @@
 #include "Singleton.hpp"
 #include "keyboard_view.hpp"
 #include <borealis.hpp>
+#include <atomic>
 #include <chrono>
+#include <mutex>
 #include <optional>
+#include <thread>
 
 // Moonlight ready gamepad
 struct GamepadState {
@@ -51,6 +54,7 @@ struct RumbleValues {
 class MoonlightInputManager : public Singleton<MoonlightInputManager> {
   public:
     MoonlightInputManager();
+    ~MoonlightInputManager();
     void dropInput();
     void handleInput(bool ignoreTouch = false);
     void handleRumble(unsigned short controller, unsigned short lowFreqMotor, unsigned short highFreqMotor);
@@ -58,6 +62,7 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     void updateTouchScreenPanDelta(brls::PanGestureStatus panStatus);
     void reloadButtonMappingLayout();
     void setInputEnabled(bool enabled) { inputEnabled = enabled; }
+    void stopControllerPolling();
     static void leftMouseClick();
     static void rightMouseClick();
 
@@ -81,6 +86,17 @@ class MoonlightInputManager : public Singleton<MoonlightInputManager> {
     std::chrono::steady_clock::time_point lastDesktopScrollEvent;
     bool inputDropped = false;
     bool inputEnabled = true;
+
+    // Guards the controller state shared with the polling thread.
+    std::recursive_mutex controllersMutex;
+    std::thread controllerPollThread;
+    std::atomic<bool> controllerPollRunning{false};
+    std::atomic<bool> controllerPollAllowed{false};
+    std::atomic<bool> controllerPollSpecialKey{false};
+    std::atomic<int64_t> controllerPollHeartbeatNs{0};
+
+    void startControllerPolling();
+    void controllerPollLoop();
 
     brls::ControllerState mapController(brls::ControllerState controller);
     static short glfwKeyToVKKey(brls::BrlsKeyboardScancode key);

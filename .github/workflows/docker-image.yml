@@ -19,6 +19,11 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Apply borealis low-latency patch
+      run: |
+        git config --global --add safe.directory '*'
+        cd extern/borealis && git apply --verbose ../../patches/borealis-low-latency.patch
+
     - name: Remove useless fonts
       run: rm -rf ./resources/font
 

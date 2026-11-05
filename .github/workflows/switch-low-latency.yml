@@ -1,0 +1,11 @@
+name: Switch low-latency build
+
+on:
+  push:
+    branches: [ low-latency ]
+  workflow_dispatch:
+
+jobs:
+  switch:
+    name: Nintendo Switch
+    uses: ./.github/workflows/docker-image.yml
