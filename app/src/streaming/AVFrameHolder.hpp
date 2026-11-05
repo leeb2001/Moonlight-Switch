@@ -26,7 +26,6 @@ public:
     static size_t capacityFor(size_t configuredQueueSize);
 
     [[nodiscard]] size_t size() const;
-    [[nodiscard]] bool isLatestFrameOnly() const;
     [[nodiscard]] size_t targetDepth() const;
     [[nodiscard]] size_t capacity() const;
     [[nodiscard]] size_t getFakeFrameUsage() const;
@@ -114,7 +113,7 @@ class AVFrameHolder : public Singleton<AVFrameHolder> {
     void prepare(int streamFps, bool transferOwnership = false) {
         m_frame_queue.configure(Settings::instance().frames_queue_size(),
                                 streamFps, transferOwnership,
-                                Settings::instance().latest_frame_mode());
+                                Settings::instance().frames_queue_size() == 0);
     }
 
     void cleanup() {
@@ -124,7 +123,6 @@ class AVFrameHolder : public Singleton<AVFrameHolder> {
     [[nodiscard]] size_t getFakeFrameStat() const { return m_frame_queue.getFakeFrameUsage(); }
     [[nodiscard]] size_t getFrameDropStat() const { return m_frame_queue.getFramesDropStat(); }
     [[nodiscard]] size_t getFrameQueueSize() const { return m_frame_queue.size(); }
-    [[nodiscard]] bool isFrameQueueLatestOnly() const { return m_frame_queue.isLatestFrameOnly(); }
     [[nodiscard]] size_t getFrameQueueTargetDepth() const { return m_frame_queue.targetDepth(); }
     [[nodiscard]] size_t getFrameQueueCapacity() const { return m_frame_queue.capacity(); }
     [[nodiscard]] size_t getFrameQueueEmptyStat() const { return m_frame_queue.getEmptyQueueStat(); }

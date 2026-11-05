@@ -40,8 +40,11 @@
             <brls:SelectorCell
                 id="decoder"/>
 
-            <brls:BooleanCell
-                id="latest_frame_mode"/>
+            <brls:SelectorCell
+                id="frames_queue_size"/>
+
+            <brls:SelectorCell
+                id="late_latch"/>
 
             <brls:BooleanCell
                 id="double_buffer"/>

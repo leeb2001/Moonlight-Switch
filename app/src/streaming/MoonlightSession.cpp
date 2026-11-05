@@ -5,6 +5,8 @@
 #include "Settings.hpp"
 #include "borealis.hpp"
 #include <string.h>
+#include <chrono>
+#include <thread>
 
 #if defined(PLATFORM_IOS) || defined(PLATFORM_VISIONOS)
 extern void getWindowSize(int* w, int* h);
@@ -400,6 +402,20 @@ void MoonlightSession::restart() {
 
 void MoonlightSession::draw(NVGcontext* vg, int width, int height) {
     if (m_video_decoder && m_video_renderer) {
+        const uint64_t drawStart = LiGetMillis();
+        if (m_is_active && m_last_draw_ms != 0 && drawStart - m_last_draw_ms >= 25) {
+            m_missed_refreshes++;
+        }
+        m_last_draw_ms = drawStart;
+
+        // Drawing starts right after a refresh. Waiting here lets a frame that
+        // finishes decoding during the wait make the next refresh instead of the
+        // one after it. Waiting too long makes the draw itself miss that refresh.
+        const int lateLatchMs = Settings::instance().late_latch_ms();
+        if (m_is_active && lateLatchMs > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(lateLatchMs));
+        }
+
         AVFrameHolder::instance().get(
             [this, vg, width, height](AVFrame* frame) {
                 m_video_renderer->draw(vg, width, height, frame, m_video_format);

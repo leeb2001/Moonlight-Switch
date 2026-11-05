@@ -241,8 +241,9 @@ class Settings : public Singleton<Settings> {
     void set_frames_queue_size(int frames_queue_size) { m_frames_queue_size = frames_queue_size; }
     [[nodiscard]] int frames_queue_size() const { return m_frames_queue_size; }
 
-    void set_latest_frame_mode(bool enabled) { m_latest_frame_mode = enabled; }
-    [[nodiscard]] bool latest_frame_mode() const { return m_latest_frame_mode; }
+    // Milliseconds to wait after a display refresh before taking a video frame.
+    void set_late_latch_ms(int ms) { m_late_latch_ms = ms; }
+    [[nodiscard]] int late_latch_ms() const { return m_late_latch_ms; }
 
     void set_double_buffer(bool enabled) { m_double_buffer = enabled; }
     [[nodiscard]] bool double_buffer() const { return m_double_buffer; }
@@ -364,13 +365,14 @@ class Settings : public Singleton<Settings> {
     int m_rcas_strength = 20;
     bool m_click_by_tap = false;
     int m_decoder_threads = 4;
-    int m_frames_queue_size = 3;
+    int m_late_latch_ms = 0;
 #ifdef __SWITCH__
-    bool m_latest_frame_mode = true;
+    // 0 always presents the newest frame; 1-3 keep the paced playout queue.
+    int m_frames_queue_size = 0;
     bool m_double_buffer = true;
     bool m_fast_input_polling = true;
 #else
-    bool m_latest_frame_mode = false;
+    int m_frames_queue_size = 3;
     bool m_double_buffer = false;
     bool m_fast_input_polling = false;
 #endif

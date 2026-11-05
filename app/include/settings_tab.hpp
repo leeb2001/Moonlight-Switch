@@ -28,7 +28,8 @@ class SettingsTab : public brls::Box {
     BRLS_BIND(brls::BooleanCell, requestHdr, "request_hdr");
     BRLS_BIND(brls::SelectorCell, decoder, "decoder");
     BRLS_BIND(brls::BooleanCell, hwDecoding, "use_hw_decoding");
-    BRLS_BIND(brls::BooleanCell, latestFrameMode, "latest_frame_mode");
+    BRLS_BIND(brls::SelectorCell, framesQueueSize, "frames_queue_size");
+    BRLS_BIND(brls::SelectorCell, lateLatch, "late_latch");
     BRLS_BIND(brls::BooleanCell, doubleBuffer, "double_buffer");
     BRLS_BIND(brls::BooleanCell, fastInputPolling, "fast_input_polling");
     BRLS_BIND(brls::Header, header, "header");

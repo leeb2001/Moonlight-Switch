@@ -306,11 +306,6 @@ size_t AVFrameQueue::size() const {
     return queue.size();
 }
 
-bool AVFrameQueue::isLatestFrameOnly() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return latestFrameOnly;
-}
-
 size_t AVFrameQueue::targetDepth() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return targetBufferedFrames;

@@ -338,12 +338,19 @@ SettingsTab::SettingsTab() {
  #endif
 
 #if defined(__SWITCH__)
-    latestFrameMode->init("settings/latest_frame_mode"_i18n, Settings::instance().latest_frame_mode(),
-                          [](bool value) { Settings::instance().set_latest_frame_mode(value); });
+    framesQueueSize->init("settings/frames_queue_size"_i18n,
+                          {"settings/frames_queue_newest"_i18n, "1", "2", "3"},
+                          Settings::instance().frames_queue_size(),
+                          [](int selected) { Settings::instance().set_frames_queue_size(selected); });
+    lateLatch->init("settings/late_latch"_i18n,
+                    {"settings/late_latch_off"_i18n, "2 ms", "4 ms", "6 ms", "8 ms", "10 ms", "12 ms"},
+                    Settings::instance().late_latch_ms() / 2,
+                    [](int selected) { Settings::instance().set_late_latch_ms(selected * 2); });
     fastInputPolling->init("settings/fast_input_polling"_i18n, Settings::instance().fast_input_polling(),
                            [](bool value) { Settings::instance().set_fast_input_polling(value); });
 #else
-    latestFrameMode->removeFromSuperView(true);
+    framesQueueSize->removeFromSuperView(true);
+    lateLatch->removeFromSuperView(true);
     fastInputPolling->removeFromSuperView(true);
 #endif
 

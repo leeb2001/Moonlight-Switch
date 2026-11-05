@@ -29,6 +29,7 @@ class MoonlightSession {
 
     bool is_active() const { return m_is_active; }
     bool is_terminated() const { return m_is_terminated; }
+    uint64_t missed_refreshes() const { return m_missed_refreshes; }
 
     bool connection_status_is_poor() const {
         return m_connection_status_is_poor;
@@ -89,4 +90,6 @@ class MoonlightSession {
 
     SessionStats m_session_stats = {};
     uint64_t m_last_stats_update_ms = 0;
+    uint64_t m_last_draw_ms = 0;
+    uint64_t m_missed_refreshes = 0;
 };

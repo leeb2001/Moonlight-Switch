@@ -388,8 +388,10 @@ void StreamingView::draw(NVGcontext* vg, float x, float y, float width,
                                   AVFrameHolder::instance().getFrameQueueTargetDepth(),
                                   AVFrameHolder::instance().getFrameQueueCapacity());
 
-        statistics += fmt::format("\nLow latency: newest frame {} | double buffer {} | fast input {}",
-                                  AVFrameHolder::instance().isFrameQueueLatestOnly() ? "on" : "off",
+        statistics += fmt::format("\nLow latency: queue {} | late pickup {} ms | missed refreshes {}\nDouble buffer {} | fast input {}",
+                                  Settings::instance().frames_queue_size(),
+                                  Settings::instance().late_latch_ms(),
+                                  session->missed_refreshes(),
                                   Settings::instance().double_buffer() ? "on" : "off",
                                   Settings::instance().fast_input_polling() ? "on" : "off");
 

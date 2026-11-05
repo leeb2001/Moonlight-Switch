@@ -309,13 +309,24 @@ void Settings::load() {
                 if (json_typeof(frames_queue_size) == JSON_INTEGER) {
                     m_frames_queue_size = (int)json_integer_value(frames_queue_size);
 
+#ifdef __SWITCH__
+                    m_frames_queue_size = std::clamp(m_frames_queue_size, 0, 3);
+#else
                     // SANITY CHECK, APP WILL CRASH OTHERWISE
                     if (m_frames_queue_size < 1) m_frames_queue_size = 1;
+#endif
                 }
             }
 
+            // Settings saved before queue size 0 existed stored this separately.
             if (json_t* latest_frame_mode = json_object_get(settings, "latest_frame_mode")) {
-                m_latest_frame_mode = json_typeof(latest_frame_mode) == JSON_TRUE;
+                if (json_typeof(latest_frame_mode) == JSON_TRUE) m_frames_queue_size = 0;
+            }
+
+            if (json_t* late_latch_ms = json_object_get(settings, "late_latch_ms")) {
+                if (json_typeof(late_latch_ms) == JSON_INTEGER) {
+                    m_late_latch_ms = std::clamp((int)json_integer_value(late_latch_ms), 0, 12) / 2 * 2;
+                }
             }
 
             if (json_t* double_buffer = json_object_get(settings, "double_buffer")) {
@@ -551,7 +562,7 @@ void Settings::save() {
             json_object_set_new(settings, "bitrate", json_integer(m_bitrate));
             json_object_set_new(settings, "decoder_threads", json_integer(m_decoder_threads));
             json_object_set_new(settings, "frames_queue_size", json_integer(m_frames_queue_size));
-            json_object_set_new(settings, "latest_frame_mode", m_latest_frame_mode ? json_true() : json_false());
+            json_object_set_new(settings, "late_latch_ms", json_integer(m_late_latch_ms));
             json_object_set_new(settings, "double_buffer", m_double_buffer ? json_true() : json_false());
             json_object_set_new(settings, "fast_input_polling", m_fast_input_polling ? json_true() : json_false());
             json_object_set_new(settings, "enable_hdr", m_enable_hdr ? json_true() : json_false());
