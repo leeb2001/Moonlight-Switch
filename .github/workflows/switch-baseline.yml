@@ -1,0 +1,11 @@
+name: Switch baseline build
+
+on:
+  push:
+    branches: [ baseline ]
+  workflow_dispatch:
+
+jobs:
+  switch:
+    name: Nintendo Switch
+    uses: ./.github/workflows/docker-image.yml
